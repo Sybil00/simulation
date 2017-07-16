@@ -6,6 +6,16 @@ import java.util.BitSet;
 
 public class Link {
     final int wlNum = Database.wlNum;
+
+    public int getWaveLengthId() {
+        return waveLengthId;
+    }
+
+    public void setWaveLengthId(int waveLengthId) {
+        this.waveLengthId = waveLengthId;
+    }
+
+    int waveLengthId;
     int src;
 
     public int getDes() {
@@ -45,6 +55,10 @@ public class Link {
     }
 
     BitSet wlMask = new BitSet(wlNum);
+    public Link (int i, int j) {
+        this.src = i;
+        this.des = j;
+    }
     public Link(int i, int j ,double weight){
         this.src = i;
         this.des = j;
