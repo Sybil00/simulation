@@ -14,6 +14,9 @@ public interface Simulation {
     void initialize(double lamda);
     void run();
     void dealWithEvent(Event event);
+
+    void write(String title, String content);
+
     void caculatePath(Event event);
     void generateServicePair(int id);
     int frand(int ia, int ib);
@@ -25,7 +28,8 @@ public interface Simulation {
     List<Integer>  findNeighbor(int i) ;
     int calculateNW(List<Integer> neighbor);
     void reliefResource(Event e);
-
+    double reliability(int i, int j);//计算两节点之间的可靠性
+    double nodeWeight(List<Integer> list,Node node );//计算node与所有相邻节点的NW
     //help方法;
 
 }

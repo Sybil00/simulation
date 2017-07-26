@@ -4,9 +4,11 @@
 
 import java.awt.Point;
 import java.awt.geom.Arc2D;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.*;
-
-import  Event.EventType;
 
 public class SimulationImpl implements Simulation {
 
@@ -19,7 +21,7 @@ public class SimulationImpl implements Simulation {
     double holdTime;
     double lamda;
     double mu;
-    int serviceId;
+    int serviceId = 1;
     Database database = new Database();
     int MAXIMUM = database.getMaximum();
     int serviceQuantity = database.getServiceQuantity();
@@ -30,6 +32,7 @@ public class SimulationImpl implements Simulation {
     double[][] weightedTopo = new double[MAXIMUM][MAXIMUM];
     List<Node> nodeList = database.getNodeList();
     int blockServiceNum =0;
+    Map<Integer,Double> blockedService = new HashMap<>();
     Queue<Event> eventQueue = new PriorityQueue<Event>(50,new Comparator<Event>(){
 
         @Override
@@ -65,7 +68,7 @@ public class SimulationImpl implements Simulation {
 
         while(serviceId <= serviceQuantity ) {
             {
-                if(eventQueue.peek().getEventType() == EventType.ARRIVAL){
+                if(eventQueue.peek().getEventType() == Event.EventType.ARRIVAL){
                     dealWithEvent(eventQueue.peek());
                     serviceId++;
                     generateServicePair(serviceId);
@@ -90,39 +93,58 @@ public class SimulationImpl implements Simulation {
                 Event event_t = new Event(event);
                 int src = event_t.getSrcNode();
                 List<Integer> neighbor = null;
-                List<Double> distance = new ArrayList<>();
-                if(countLoad(src) >= helpStart)
-                    {
-                        neighbor = findNeighbor(src);
-                        int helpNeighbor = calculateNW(neighbor);
+
+                if(countLoad(src) >= helpStart) {
+                    List<Double> distance = new ArrayList<>(); // 存储由各个邻节点得到的相应移动范围
+                    neighbor = findNeighbor(src);
+                    //int helpNeighbor = calculateNW(neighbor);
+                    double max = Double.MIN_VALUE;// 记录最大权重
+                    int help = Integer.MIN_VALUE;// 记录权重最大的邻节点
+                    Node position = null;
+                    for (int helpNeighbor : neighbor) {
                         // 说明该节点可以进行帮助
                         if (countLoad(helpNeighbor) < helpAvailable) {
-                           // 获取进行help的节点的邻节点
+                            // 获取进行help的节点的邻节点
                             Node a = nodeList.get(src);
                             Node b = nodeList.get(helpNeighbor);
                             List<Integer> neighbor2Stage = findNeighbor(helpNeighbor);
-                            for(int i : neighbor2Stage) {
+                            for (int i : neighbor2Stage) {
                                 // 先判断角度,确定三个点的关系
                                 Node c = nodeList.get(i);
-                                double range = generateVector(a,b,c);
-                                    distance.add(range);
+                                double range = generateVector(a, b, c);
+                                distance.add(range);
                             }
                             Collections.sort(distance);
                             // 选择移动最小的
                             double d = distance.get(0);
+                            if(d == Integer.MIN_VALUE){
+                                continue;
+                            }
                             //更新节点的坐标
-                            Node movedPosition = updatePosition(d,a,b);
-                            //在list中替换节点
-                            nodeList.set(helpNeighbor,movedPosition);
-                            event_t.setSrcNode(helpNeighbor);
-                            eventQueue.poll();
-                            eventQueue.offer(event_t);
+                            Node movedPosition = updatePosition(d, a, b);
+                            double NW = nodeWeight(neighbor2Stage,movedPosition);
+                            max = NW > max ? NW: max ;
+                            help = NW > max? helpNeighbor: help;
+                            position = NW > max? movedPosition: position;
                         }
                         else {
-                            blockServiceNum ++;
-                            eventQueue.poll();
+                            continue;
                         }
                     }
+                    if(help != Integer.MIN_VALUE) {
+                        nodeList.set(help,position);
+                        eventQueue.poll();
+                        event_t.setSrcNode(help);
+                        eventQueue.offer(event_t);
+                    }
+                    else{
+                        blockServiceNum++;
+                        double curBlockRate = blockServiceNum/serviceId;
+                        blockedService.put(serviceId,curBlockRate);
+                        eventQueue.poll();
+                    }
+
+                }
                 else
                 {
                     caculatePath(event_t);
@@ -132,6 +154,8 @@ public class SimulationImpl implements Simulation {
                     }
                     else {
                         blockServiceNum++;
+                        double curBlockRate = blockServiceNum/serviceId;
+                        blockedService.put(serviceId,curBlockRate);
                     }
                     eventQueue.poll();
                 }
@@ -147,6 +171,30 @@ public class SimulationImpl implements Simulation {
             }
 
 
+        }
+
+
+
+    }
+    //写入文件
+    @Override
+    public void write(String title, String content) {
+        try {
+
+            File file = new File(title);
+            if (!file.exists()) {
+                file.createNewFile();
+            }
+
+            FileWriter fw = new FileWriter(file.getAbsoluteFile());
+            BufferedWriter bw = new BufferedWriter(fw);
+            bw.write(content);
+            bw.close();
+
+            System.out.println("Done");
+
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -167,12 +215,12 @@ public class SimulationImpl implements Simulation {
         double holdTime = arriveTimeGen(this.mu);
         int source = 0, dest = 0;
         randomSrcDes(source,dest);
-        Event eventIn = new Event(EventType.ARRIVAL, arriveTime, id);
+        Event eventIn = new Event(Event.EventType.ARRIVAL, arriveTime, id);
         eventIn.setId(id);
         eventIn.setHoldTime(holdTime);
         //这个方法有问题
         eventIn.setResAndDest(source, dest);
-        Event eventOut = new Event(EventType.END,arriveTime,id);
+        Event eventOut = new Event(Event.EventType.END,arriveTime,id);
         eventOut.setTime(arriveTime + holdTime);
         eventOut.setResAndDest(source,dest);
         eventQueue.add(eventIn);
@@ -235,17 +283,22 @@ public class SimulationImpl implements Simulation {
     public boolean reserveSource(Event e){
         int id = e.getId();
         int index = Integer.MIN_VALUE;
-        List<List<Integer>> path = e.getMultiPath();
+        List<Path> path = e.getMultiPath();
         BitSet wl = new BitSet();
 
-        List<Integer> workPath = null;
-        for(List<Integer> singlePath: path){
-            Object[] p = singlePath.toArray();
+//        List<Integer> workPath = null;
+        Path workPath = null;
+        for(Path singlePath: path){
+            List<Vertex> list = singlePath.get_Vertices();
+            // Object[] p = singlePath.toArray();
+            int len = list.size();
             BitSet bs = new BitSet(10);
-            for(int i = 1; i < p.length;i++) {
+            for(int i = 1; i < len;i++) {
 
-                int begin = (Integer)p[i-1];
-                int end = (Integer)p[i];
+//                int begin = (Integer)p[i-1];
+//                int end = (Integer)p[i];
+                int begin = list.get(i-1).getId();
+                int end = list.get(i).getId();
                 Link link = database.getIndexLinkMap().get(new Point(begin,end));
                 BitSet wlMask = link.wlMask;
                 boolean ret = link.isFull();
@@ -272,11 +325,12 @@ public class SimulationImpl implements Simulation {
 
         }
         index = wl.nextClearBit(0);
-        for(int i =1 ; i < workPath.size() ;i++) {
-            int begin = workPath.get(i-1);
-            int end =workPath.get(i);
+        List<Vertex> list = workPath.get_Vertices();
+        for(int i =1 ; i < list.size() ;i++) {
+            int begin = list.get(i-1).getId();
+            int end =list.get(i).getId();
             Link link = database.getIndexLinkMap().get(new Point(begin,end));
-            link.setWaveLengthId(index);
+            e.setWorkWavalength(index);
             BitSet updatedMask = link.getWlMask();
             updatedMask.set(index);
             link.setWlMask(updatedMask);
@@ -332,7 +386,7 @@ public class SimulationImpl implements Simulation {
             }
             double NW = k > 0 ? sum/k : 0;
 
-            max = max > NW ? max : NW;
+            //max = max > NW ? max : NW;
             map.put(NW,i);
         }
         return map.get(max);
@@ -340,12 +394,13 @@ public class SimulationImpl implements Simulation {
 
     @Override
     public void reliefResource(Event e) {
-        List<Integer> workPath = e.getWorkPath();
-        for(int i =1 ; i < workPath.size() ;i++) {
-            int begin = workPath.get(i-1);
-            int end =workPath.get(i);
+        Path workPath = e.getWorkPath();
+        List<Vertex> list = workPath.get_Vertices();
+        for(int i =1 ; i < list.size() ;i++) {
+            int begin = list.get(i-1).getId();
+            int end =list.get(i).getId();
             Link link = database.getIndexLinkMap().get(new Point(begin,end));
-            int index = link.getWaveLengthId();
+            int index = e.getWorkWavalength();
             BitSet updatedMask = link.getWlMask();
             updatedMask.clear(index);
             link.setWlMask(updatedMask);
@@ -355,6 +410,23 @@ public class SimulationImpl implements Simulation {
         }
     }
 
+    @Override
+    public double reliability(int i, int j) {
+        return 0;
+    }
+
+    @Override
+    public double nodeWeight(List<Integer> list, Node node) {
+        int id = node.getNodeId();
+        double sum = 0;
+        int k = list.size();
+        for(int i: list) {
+            double reliability = reliability(i, id);
+            sum += reliability * (database.wlNum - linkUtilization[id][i]);
+        }
+        double NW = k == 0? 0 :sum/k;
+        return NW;
+    }
 
     /*
     @param a:源节点

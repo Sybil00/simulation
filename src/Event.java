@@ -66,24 +66,34 @@ public class Event {
     int desNode;
     EventType eventType;
 
-    public List<List<Integer>> getMultiPath() {
+    public int getWorkWavalength() {
+        return workWavalength;
+    }
+
+    public void setWorkWavalength(int workWavalength) {
+        this.workWavalength = workWavalength;
+    }
+
+    int workWavalength;
+
+    public List<Path> getMultiPath() {
         return multiPath;
     }
 
-    public void setMultiPath(List<List<Integer>> multiPath) {
+    public void setMultiPath(List<Path> multiPath) {
         this.multiPath = multiPath;
     }
 
-    public List<Integer> getWorkPath() {
+    public Path getWorkPath() {
         return workPath;
     }
 
-    public void setWorkPath(List<Integer> workPath) {
+    public void setWorkPath(Path workPath) {
         this.workPath = workPath;
     }
 
-    List<List<Integer>> multiPath;
-    List<Integer> workPath;
+    List<Path> multiPath;
+    Path workPath;
     public enum EventType{ARRIVAL,END,NEW_ARRIVAL,DISABLE};
     public Event(EventType type,double time, int i) {
         this.eventType = type;

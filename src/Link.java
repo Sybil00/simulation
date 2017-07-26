@@ -7,15 +7,6 @@ import java.util.BitSet;
 public class Link {
     final int wlNum = Database.wlNum;
 
-    public int getWaveLengthId() {
-        return waveLengthId;
-    }
-
-    public void setWaveLengthId(int waveLengthId) {
-        this.waveLengthId = waveLengthId;
-    }
-
-    int waveLengthId;
     int src;
 
     public int getDes() {
@@ -28,15 +19,15 @@ public class Link {
 
     int des;
 
-    public double getInitWeight() {
-        return initWeight;
+    public double getWeight() {
+        return weight;
     }
 
-    public void setInitWeight(double initWeight) {
-        this.initWeight = initWeight;
+    public void setWeight(double initWeight) {
+        this.weight = initWeight;
     }
 
-    double initWeight;
+    double weight;
 
     public int getSrc() {
         return src;
@@ -62,7 +53,7 @@ public class Link {
     public Link(int i, int j ,double weight){
         this.src = i;
         this.des = j;
-        this.initWeight = weight;
+        this.weight = weight;
     }
     public boolean isFull(){
         if(wlMask.size() >= 10){
